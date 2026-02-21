@@ -5,12 +5,12 @@ Menu bar app button click changes monitor brightness via m1ddc CLI.
 
 ## Tasks
 
-- [ ] Create Swift Package Manager project (Package.swift)
-- [ ] Implement App.swift - MenuBarExtra entry point
-- [ ] Implement MenuBarView.swift - Minimal UI with button
-- [ ] Implement CLIDDCBridge.swift - m1ddc Process wrapper
-- [ ] `swift build` succeeds
-- [ ] `swift run` -> button click -> brightness changes visually
+- [x] Create Swift Package Manager project (Package.swift)
+- [x] Implement App.swift - MenuBarExtra entry point
+- [x] Implement MenuBarView.swift - Minimal UI with button (+ contrast)
+- [x] Implement CLIDDCBridge.swift - m1ddc Process wrapper
+- [x] `swift build` succeeds
+- [x] `swift run` -> button click -> brightness & contrast changes visually
 
 ## Verification
 ```bash

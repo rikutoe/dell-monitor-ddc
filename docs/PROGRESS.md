@@ -5,9 +5,9 @@
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 0 | DDC verification (m1ddc CLI) | Complete |
-| 1 | Document-driven development foundation | In Progress |
-| 2 | Minimal E2E app (m1ddc CLI bridge) | Pending |
-| 3 | Native DDC control module | Pending |
+| 1 | Document-driven development foundation | Complete |
+| 2 | Minimal E2E app (m1ddc CLI bridge) | Complete |
+| 3 | Native DDC control module | In Progress |
 | 4 | Global hotkeys (F1/F2) + Tahoe OSD | Pending |
 | 5 | Smart cursor-based targeting | Pending |
 | 6 | Menu bar UI (sliders + settings) | Pending |
@@ -26,4 +26,16 @@
 - **Decision**: Track values in-memory after writes instead of relying on DDC reads
 
 ### Phase 1: Document-driven development foundation
+- **Status**: Complete
+
+### Phase 2: Minimal E2E app (m1ddc CLI bridge)
+- **Status**: Complete
+- **Deliverables**:
+  - Package.swift (SPM executable target, macOS 14+)
+  - App.swift - MenuBarExtra entry point
+  - MenuBarView.swift - Brightness/Contrast ±5 buttons
+  - CLIDDCBridge.swift - m1ddc Process wrapper
+- **Verified**: Button click → brightness & contrast change visually
+
+### Phase 3: Native DDC control module
 - **Status**: In Progress
