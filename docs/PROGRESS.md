@@ -9,7 +9,7 @@
 | 2 | Minimal E2E app (m1ddc CLI bridge) | Complete |
 | 3 | Native DDC control module | Complete |
 | 4 | Global hotkeys (F1/F2) + Tahoe OSD | Partial |
-| 5 | Smart cursor-based targeting | In Progress |
+| 5 | Smart cursor-based targeting | Complete |
 | 6 | Menu bar UI (sliders + settings) | Pending |
 | 7 | Polish | Pending |
 
@@ -61,4 +61,8 @@
   - Lunar の実装を参考に要調査
 
 ### Phase 5: Smart cursor-based targeting
-- **Status**: In Progress
+- **Status**: Complete
+- **Deliverables**:
+  - CursorRouter.swift - NSEvent.mouseLocation + CGDisplayIsBuiltin
+  - BrightnessEngine updated - returns Bool for passthrough support
+  - HotkeyManager updated - consume/passthrough based on cursor position

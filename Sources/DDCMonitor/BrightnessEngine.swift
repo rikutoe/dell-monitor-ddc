@@ -22,20 +22,30 @@ final class BrightnessEngine {
     }
 
     /// Increase brightness and contrast by one step.
-    func increment() {
+    /// Returns false if cursor is on built-in display (passthrough).
+    @discardableResult
+    func increment() -> Bool {
         adjust(by: step)
     }
 
     /// Decrease brightness and contrast by one step.
-    func decrement() {
+    /// Returns false if cursor is on built-in display (passthrough).
+    @discardableResult
+    func decrement() -> Bool {
         adjust(by: -step)
     }
 
-    func adjust(by delta: Int) {
+    @discardableResult
+    func adjust(by delta: Int) -> Bool {
+        // Only control external display when cursor is on it
+        guard CursorRouter.isCursorOnExternalDisplay() else {
+            return false // passthrough to system
+        }
+
         let newBrightness = clamp(brightness + delta)
         let newContrast = clamp(contrast + delta)
 
-        guard let display else { return }
+        guard let display else { return false }
 
         do {
             try display.setBrightness(newBrightness)
@@ -52,6 +62,7 @@ final class BrightnessEngine {
         }
 
         onValueChanged?(brightness, contrast)
+        return true
     }
 
     private func clamp(_ value: Int) -> Int {

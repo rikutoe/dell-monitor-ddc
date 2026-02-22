@@ -23,11 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.osdManager.show(value: brightness)
         }
 
+        // Returns Bool: true = handled (external), false = passthrough (built-in)
         hotkeyManager.onF1 = { [weak self] in
-            self?.engine.decrement()
+            self?.engine.decrement() ?? false
         }
         hotkeyManager.onF2 = { [weak self] in
-            self?.engine.increment()
+            self?.engine.increment() ?? false
         }
         hotkeyManager.start()
     }
