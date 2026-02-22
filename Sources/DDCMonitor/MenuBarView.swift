@@ -3,41 +3,76 @@ import DDCControl
 
 struct MenuBarView: View {
     let engine: BrightnessEngine
+    @State private var showSettings = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text("Brightness: \(engine.brightness)")
-                .font(.headline)
+        VStack(spacing: 12) {
+            // Brightness slider
+            HStack {
+                Image(systemName: "sun.max.fill")
+                    .frame(width: 20)
+                Slider(
+                    value: brightnessBinding,
+                    in: Double(engine.minValue)...Double(engine.maxValue),
+                    step: 1
+                )
+                Text("\(engine.brightness)")
+                    .monospacedDigit()
+                    .frame(width: 30, alignment: .trailing)
+            }
 
-            HStack(spacing: 12) {
-                Button("- \(engine.step)") {
-                    engine.decrement()
-                }
-                Button("+ \(engine.step)") {
-                    engine.increment()
-                }
+            // Contrast slider
+            HStack {
+                Image(systemName: "circle.lefthalf.filled")
+                    .frame(width: 20)
+                Slider(
+                    value: contrastBinding,
+                    in: Double(engine.minValue)...Double(engine.maxValue),
+                    step: 1
+                )
+                Text("\(engine.contrast)")
+                    .monospacedDigit()
+                    .frame(width: 30, alignment: .trailing)
             }
 
             Divider()
 
-            Text("Contrast: \(engine.contrast)")
-                .font(.headline)
-
-            HStack(spacing: 12) {
-                Button("- \(engine.step)") {
-                    engine.adjust(by: -engine.step)
-                }
-                Button("+ \(engine.step)") {
-                    engine.adjust(by: engine.step)
-                }
+            Button("Settings...") {
+                showSettings = true
             }
-
-            Divider()
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
 
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
         }
         .padding()
+        .frame(width: 280)
+    }
+
+    private var brightnessBinding: Binding<Double> {
+        Binding<Double>(
+            get: { Double(engine.brightness) },
+            set: { newValue in
+                let delta = Int(newValue) - engine.brightness
+                if delta != 0 {
+                    engine.adjustBrightness(to: Int(newValue))
+                }
+            }
+        )
+    }
+
+    private var contrastBinding: Binding<Double> {
+        Binding<Double>(
+            get: { Double(engine.contrast) },
+            set: { newValue in
+                let delta = Int(newValue) - engine.contrast
+                if delta != 0 {
+                    engine.adjustContrast(to: Int(newValue))
+                }
+            }
+        )
     }
 }

@@ -10,7 +10,7 @@
 | 3 | Native DDC control module | Complete |
 | 4 | Global hotkeys (F1/F2) + Tahoe OSD | Partial |
 | 5 | Smart cursor-based targeting | Complete |
-| 6 | Menu bar UI (sliders + settings) | Pending |
+| 6 | Menu bar UI (sliders + settings) | Complete |
 | 7 | Polish | Pending |
 
 ## Phase Details

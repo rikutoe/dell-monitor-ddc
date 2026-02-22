@@ -6,10 +6,11 @@ final class BrightnessEngine {
     private(set) var brightness: Int = 30
     private(set) var contrast: Int = 39
     private var display: DDCDisplay?
+    private let settings = SettingsStore.shared
 
-    let step = 5
-    let minValue = 0
-    let maxValue = 100
+    var step: Int { settings.step }
+    var minValue: Int { 0 }
+    var maxValue: Int { 100 }
 
     /// Called when values change (for UI updates).
     var onValueChanged: ((Int, Int) -> Void)?
@@ -22,50 +23,80 @@ final class BrightnessEngine {
     }
 
     /// Increase brightness and contrast by one step.
-    /// Returns false if cursor is on built-in display (passthrough).
     @discardableResult
     func increment() -> Bool {
-        adjust(by: step)
-    }
-
-    /// Decrease brightness and contrast by one step.
-    /// Returns false if cursor is on built-in display (passthrough).
-    @discardableResult
-    func decrement() -> Bool {
-        adjust(by: -step)
-    }
-
-    @discardableResult
-    func adjust(by delta: Int) -> Bool {
-        // Only control external display when cursor is on it
-        guard CursorRouter.isCursorOnExternalDisplay() else {
-            return false // passthrough to system
-        }
-
-        let newBrightness = clamp(brightness + delta)
-        let newContrast = clamp(contrast + delta)
-
-        guard let display else { return false }
-
-        do {
-            try display.setBrightness(newBrightness)
-            brightness = newBrightness
-        } catch {
-            NSLog("BrightnessEngine: brightness write error: %@", error.localizedDescription)
-        }
-
-        do {
-            try display.setContrast(newContrast)
-            contrast = newContrast
-        } catch {
-            NSLog("BrightnessEngine: contrast write error: %@", error.localizedDescription)
-        }
-
-        onValueChanged?(brightness, contrast)
+        guard CursorRouter.isCursorOnExternalDisplay() else { return false }
+        let bNew = clampBrightness(brightness + step)
+        let cNew = clampContrast(contrast + step)
+        applyBoth(brightness: bNew, contrast: cNew)
         return true
     }
 
-    private func clamp(_ value: Int) -> Int {
-        max(minValue, min(maxValue, value))
+    /// Decrease brightness and contrast by one step.
+    @discardableResult
+    func decrement() -> Bool {
+        guard CursorRouter.isCursorOnExternalDisplay() else { return false }
+        let bNew = clampBrightness(brightness - step)
+        let cNew = clampContrast(contrast - step)
+        applyBoth(brightness: bNew, contrast: cNew)
+        return true
+    }
+
+    /// Set brightness directly (from slider).
+    func adjustBrightness(to value: Int) {
+        let clamped = clampBrightness(value)
+        guard let display else { return }
+        do {
+            try display.setBrightness(clamped)
+            brightness = clamped
+            onValueChanged?(brightness, contrast)
+        } catch {
+            NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
+        }
+    }
+
+    /// Set contrast directly (from slider).
+    func adjustContrast(to value: Int) {
+        let clamped = clampContrast(value)
+        guard let display else { return }
+        do {
+            try display.setContrast(clamped)
+            contrast = clamped
+            onValueChanged?(brightness, contrast)
+        } catch {
+            NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
+        }
+    }
+
+    /// Adjust both brightness and contrast together (hotkey).
+    func adjust(by delta: Int) {
+        let bNew = clampBrightness(brightness + delta)
+        let cNew = clampContrast(contrast + delta)
+        applyBoth(brightness: bNew, contrast: cNew)
+    }
+
+    private func applyBoth(brightness bNew: Int, contrast cNew: Int) {
+        guard let display else { return }
+        do {
+            try display.setBrightness(bNew)
+            brightness = bNew
+        } catch {
+            NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
+        }
+        do {
+            try display.setContrast(cNew)
+            contrast = cNew
+        } catch {
+            NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
+        }
+        onValueChanged?(brightness, contrast)
+    }
+
+    private func clampBrightness(_ value: Int) -> Int {
+        max(settings.brightnessMin, min(settings.brightnessMax, value))
+    }
+
+    private func clampContrast(_ value: Int) -> Int {
+        max(settings.contrastMin, min(settings.contrastMax, value))
     }
 }
