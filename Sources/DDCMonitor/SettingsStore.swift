@@ -12,6 +12,12 @@ final class SettingsStore {
         static let contrastMin = "contrastMin"
         static let contrastMax = "contrastMax"
         static let step = "step"
+        static let dayBrightness = "dayBrightness"
+        static let dayContrast = "dayContrast"
+        static let nightBrightness = "nightBrightness"
+        static let nightContrast = "nightContrast"
+        static let lastBrightness = "lastBrightness"
+        static let lastContrast = "lastContrast"
     }
 
     var brightnessMin: Int {
@@ -37,5 +43,39 @@ final class SettingsStore {
     var step: Int {
         get { defaults.object(forKey: Keys.step) as? Int ?? 5 }
         set { defaults.set(newValue, forKey: Keys.step) }
+    }
+
+    // MARK: - Presets
+
+    var dayBrightness: Int {
+        get { defaults.object(forKey: Keys.dayBrightness) as? Int ?? 70 }
+        set { defaults.set(newValue, forKey: Keys.dayBrightness) }
+    }
+
+    var dayContrast: Int {
+        get { defaults.object(forKey: Keys.dayContrast) as? Int ?? 50 }
+        set { defaults.set(newValue, forKey: Keys.dayContrast) }
+    }
+
+    var nightBrightness: Int {
+        get { defaults.object(forKey: Keys.nightBrightness) as? Int ?? 20 }
+        set { defaults.set(newValue, forKey: Keys.nightBrightness) }
+    }
+
+    var nightContrast: Int {
+        get { defaults.object(forKey: Keys.nightContrast) as? Int ?? 30 }
+        set { defaults.set(newValue, forKey: Keys.nightContrast) }
+    }
+
+    // MARK: - Last Known Values
+
+    var lastBrightness: Int? {
+        get { defaults.object(forKey: Keys.lastBrightness) as? Int }
+        set { defaults.set(newValue, forKey: Keys.lastBrightness) }
+    }
+
+    var lastContrast: Int? {
+        get { defaults.object(forKey: Keys.lastContrast) as? Int }
+        set { defaults.set(newValue, forKey: Keys.lastContrast) }
     }
 }

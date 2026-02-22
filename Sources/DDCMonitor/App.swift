@@ -8,6 +8,7 @@ struct DDCMonitorApp: App {
         MenuBarExtra("DDC Monitor", systemImage: "sun.max.fill") {
             MenuBarView(engine: appDelegate.engine)
         }
+        .menuBarExtraStyle(.window)
     }
 }
 

@@ -1,12 +1,19 @@
 import Foundation
+import Observation
 import DDCControl
 
 /// Manages brightness and contrast values, applying changes to the display.
+@Observable
 final class BrightnessEngine {
-    private(set) var brightness: Int = 30
-    private(set) var contrast: Int = 39
+    var brightness: Int
+    var contrast: Int
     private var display: DDCDisplay?
     private let settings = SettingsStore.shared
+
+    init() {
+        brightness = settings.lastBrightness ?? 50
+        contrast = settings.lastContrast ?? 50
+    }
 
     var step: Int { settings.step }
     var minValue: Int { 0 }
@@ -42,27 +49,27 @@ final class BrightnessEngine {
         return true
     }
 
-    /// Set brightness directly (from slider).
+    /// Set brightness directly (from slider). No OSD.
     func adjustBrightness(to value: Int) {
         let clamped = clampBrightness(value)
         guard let display else { return }
         do {
             try display.setBrightness(clamped)
             brightness = clamped
-            onValueChanged?(brightness, contrast)
+            settings.lastBrightness = clamped
         } catch {
             NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
         }
     }
 
-    /// Set contrast directly (from slider).
+    /// Set contrast directly (from slider). No OSD.
     func adjustContrast(to value: Int) {
         let clamped = clampContrast(value)
         guard let display else { return }
         do {
             try display.setContrast(clamped)
             contrast = clamped
-            onValueChanged?(brightness, contrast)
+            settings.lastContrast = clamped
         } catch {
             NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
         }
@@ -80,12 +87,14 @@ final class BrightnessEngine {
         do {
             try display.setBrightness(bNew)
             brightness = bNew
+            settings.lastBrightness = bNew
         } catch {
             NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
         }
         do {
             try display.setContrast(cNew)
             contrast = cNew
+            settings.lastContrast = cNew
         } catch {
             NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
         }
