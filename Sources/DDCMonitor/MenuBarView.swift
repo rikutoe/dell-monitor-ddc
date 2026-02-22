@@ -1,11 +1,12 @@
 import SwiftUI
+import DDCControl
 
 struct MenuBarView: View {
     @State private var brightness: Int = 30
     @State private var contrast: Int = 39
     @State private var statusMessage: String = ""
+    @State private var display: DDCDisplay?
 
-    private let bridge = CLIDDCBridge()
     private let step = 5
 
     var body: some View {
@@ -15,10 +16,10 @@ struct MenuBarView: View {
 
             HStack(spacing: 12) {
                 Button("- \(step)") {
-                    adjust(\.brightness, by: -step)
+                    adjustBrightness(by: -step)
                 }
                 Button("+ \(step)") {
-                    adjust(\.brightness, by: step)
+                    adjustBrightness(by: step)
                 }
             }
 
@@ -29,10 +30,10 @@ struct MenuBarView: View {
 
             HStack(spacing: 12) {
                 Button("- \(step)") {
-                    adjust(\.contrast, by: -step)
+                    adjustContrast(by: -step)
                 }
                 Button("+ \(step)") {
-                    adjust(\.contrast, by: step)
+                    adjustContrast(by: step)
                 }
             }
 
@@ -49,33 +50,40 @@ struct MenuBarView: View {
             }
         }
         .padding()
-    }
-
-    private enum Control: String {
-        case brightness, contrast
-    }
-
-    private func adjust(_ keyPath: WritableKeyPath<MenuBarView, Int>, by delta: Int) {
-        let current = self[keyPath: keyPath]
-        let newValue = max(0, min(100, current + delta))
-
-        let result: Result<Void, DDCBridgeError>
-        if keyPath == \.brightness {
-            result = bridge.setBrightness(newValue)
-        } else {
-            result = bridge.setContrast(newValue)
-        }
-
-        switch result {
-        case .success:
-            // SwiftUI @State requires direct assignment
-            if keyPath == \.brightness {
-                brightness = newValue
-            } else {
-                contrast = newValue
+        .onAppear {
+            display = DDCDisplay.enumerate().first
+            if display == nil {
+                statusMessage = "No external display found"
             }
-            statusMessage = "Set to \(newValue)"
-        case .failure(let error):
+        }
+    }
+
+    private func adjustBrightness(by delta: Int) {
+        let newValue = max(0, min(100, brightness + delta))
+        guard let display else {
+            statusMessage = "No display"
+            return
+        }
+        do {
+            try display.setBrightness(newValue)
+            brightness = newValue
+            statusMessage = "Brightness: \(newValue)"
+        } catch {
+            statusMessage = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func adjustContrast(by delta: Int) {
+        let newValue = max(0, min(100, contrast + delta))
+        guard let display else {
+            statusMessage = "No display"
+            return
+        }
+        do {
+            try display.setContrast(newValue)
+            contrast = newValue
+            statusMessage = "Contrast: \(newValue)"
+        } catch {
             statusMessage = "Error: \(error.localizedDescription)"
         }
     }

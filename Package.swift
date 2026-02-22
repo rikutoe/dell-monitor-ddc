@@ -8,7 +8,20 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "DDCMonitor",
+            dependencies: ["DDCControl"],
             path: "Sources/DDCMonitor"
+        ),
+        .target(
+            name: "DDCControl",
+            path: "Sources/DDCControl",
+            linkerSettings: [
+                .linkedFramework("IOKit"),
+            ]
+        ),
+        .testTarget(
+            name: "DDCControlTests",
+            dependencies: ["DDCControl"],
+            path: "Tests/DDCControlTests"
         ),
     ]
 )
