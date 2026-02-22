@@ -8,8 +8,8 @@
 | 1 | Document-driven development foundation | Complete |
 | 2 | Minimal E2E app (m1ddc CLI bridge) | Complete |
 | 3 | Native DDC control module | Complete |
-| 4 | Global hotkeys (F1/F2) + Tahoe OSD | In Progress |
-| 5 | Smart cursor-based targeting | Pending |
+| 4 | Global hotkeys (F1/F2) + Tahoe OSD | Partial |
+| 5 | Smart cursor-based targeting | In Progress |
 | 6 | Menu bar UI (sliders + settings) | Pending |
 | 7 | Polish | Pending |
 
@@ -49,4 +49,16 @@
 - **Note**: @_silgen_name caused SIGTRAP crash; switched to dlsym + @convention(c)
 
 ### Phase 4: Global hotkeys (F1/F2) + Tahoe-style OSD
+- **Status**: Partial
+- **Deliverables**:
+  - HotkeyManager.swift - CGEvent tap (Fn+F1/F2 で動作)
+  - BrightnessEngine.swift - brightness + contrast 同時調整
+  - OSDWindow.swift / OSDView.swift / OSDManager.swift - Tahoe 風 OSD
+- **Verified**: Fn+F1/F2 → brightness/contrast 変更 + OSD 表示
+- **Backlog**: Fn なしで F1/F2 を捕捉する方法を調査（Lunar は成功している）
+  - macOS Tahoe で NX_SYSDEFINED subtype=8 が生成されない
+  - subtype=7 data1=0x1 が来るが F1/F2 の区別不可
+  - Lunar の実装を参考に要調査
+
+### Phase 5: Smart cursor-based targeting
 - **Status**: In Progress
