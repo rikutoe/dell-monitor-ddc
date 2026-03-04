@@ -18,6 +18,9 @@ final class SettingsStore {
         static let nightContrast = "nightContrast"
         static let lastBrightness = "lastBrightness"
         static let lastContrast = "lastContrast"
+        static let volumeMin = "volumeMin"
+        static let volumeMax = "volumeMax"
+        static let lastVolume = "lastVolume"
     }
 
     var brightnessMin: Int {
@@ -77,5 +80,20 @@ final class SettingsStore {
     var lastContrast: Int? {
         get { defaults.object(forKey: Keys.lastContrast) as? Int }
         set { defaults.set(newValue, forKey: Keys.lastContrast) }
+    }
+
+    var volumeMin: Int {
+        get { defaults.object(forKey: Keys.volumeMin) as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: Keys.volumeMin) }
+    }
+
+    var volumeMax: Int {
+        get { defaults.object(forKey: Keys.volumeMax) as? Int ?? 100 }
+        set { defaults.set(newValue, forKey: Keys.volumeMax) }
+    }
+
+    var lastVolume: Int? {
+        get { defaults.object(forKey: Keys.lastVolume) as? Int }
+        set { defaults.set(newValue, forKey: Keys.lastVolume) }
     }
 }

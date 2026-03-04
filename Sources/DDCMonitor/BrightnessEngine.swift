@@ -1,18 +1,23 @@
 import Foundation
 import Observation
 import DDCControl
+import AppKit
 
 /// Manages brightness and contrast values, applying changes to the display.
 @Observable
 final class BrightnessEngine {
     var brightness: Int
     var contrast: Int
+    var volume: Int
+    /// Error message from the last display read attempt (nil = success).
+    var lastReadError: String?
     private var display: DDCDisplay?
     private let settings = SettingsStore.shared
 
     init() {
         brightness = settings.lastBrightness ?? 50
         contrast = settings.lastContrast ?? 50
+        volume = settings.lastVolume ?? 50
     }
 
     var step: Int { settings.step }
@@ -26,6 +31,57 @@ final class BrightnessEngine {
         display = DDCDisplay.enumerate().first
         if display == nil {
             NSLog("BrightnessEngine: No external display found")
+        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenDidChange),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    @objc private func screenDidChange(_ note: Notification) {
+        NSLog("BrightnessEngine: Screen configuration changed, reconnecting")
+        reconnect()
+    }
+
+    /// Re-enumerate displays to pick up reconnected monitors.
+    func reconnect() {
+        display = DDCDisplay.enumerate().first
+        if display != nil {
+            NSLog("BrightnessEngine: Display reconnected")
+        } else {
+            NSLog("BrightnessEngine: No external display found after reconnect")
+        }
+    }
+
+    /// Try to read current brightness/contrast from the display via DDC.
+    /// Updates values on success, sets lastReadError on failure.
+    func refreshFromDisplay() {
+        lastReadError = nil
+
+        if display == nil {
+            reconnect()
+        }
+        guard let display else {
+            lastReadError = DDCError.noExternalDisplay.localizedDescription
+            return
+        }
+
+        do {
+            let b = try display.getBrightness()
+            let c = try display.getContrast()
+            let v = try display.getVolume()
+            brightness = b
+            contrast = c
+            volume = v
+            settings.lastBrightness = b
+            settings.lastContrast = c
+            settings.lastVolume = v
+            NSLog("BrightnessEngine: Read from display - brightness=%d, contrast=%d, volume=%d", b, c, v)
+        } catch {
+            NSLog("BrightnessEngine: Failed to read from display: %@", error.localizedDescription)
+            lastReadError = error.localizedDescription
         }
     }
 
@@ -52,26 +108,30 @@ final class BrightnessEngine {
     /// Set brightness directly (from slider). No OSD.
     func adjustBrightness(to value: Int) {
         let clamped = clampBrightness(value)
-        guard let display else { return }
-        do {
-            try display.setBrightness(clamped)
+        let ok = withReconnect { try $0.setBrightness(clamped) }
+        if ok {
             brightness = clamped
             settings.lastBrightness = clamped
-        } catch {
-            NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
         }
     }
 
     /// Set contrast directly (from slider). No OSD.
     func adjustContrast(to value: Int) {
         let clamped = clampContrast(value)
-        guard let display else { return }
-        do {
-            try display.setContrast(clamped)
+        let ok = withReconnect { try $0.setContrast(clamped) }
+        if ok {
             contrast = clamped
             settings.lastContrast = clamped
-        } catch {
-            NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
+        }
+    }
+
+    /// Set volume directly (from slider). No OSD.
+    func adjustVolume(to value: Int) {
+        let clamped = clampVolume(value)
+        let ok = withReconnect { try $0.setVolume(clamped) }
+        if ok {
+            volume = clamped
+            settings.lastVolume = clamped
         }
     }
 
@@ -83,22 +143,38 @@ final class BrightnessEngine {
     }
 
     private func applyBoth(brightness bNew: Int, contrast cNew: Int) {
-        guard let display else { return }
-        do {
-            try display.setBrightness(bNew)
+        if withReconnect({ try $0.setBrightness(bNew) }) {
             brightness = bNew
             settings.lastBrightness = bNew
-        } catch {
-            NSLog("BrightnessEngine: brightness error: %@", error.localizedDescription)
         }
-        do {
-            try display.setContrast(cNew)
+        if withReconnect({ try $0.setContrast(cNew) }) {
             contrast = cNew
             settings.lastContrast = cNew
-        } catch {
-            NSLog("BrightnessEngine: contrast error: %@", error.localizedDescription)
         }
         onValueChanged?(brightness, contrast)
+    }
+
+    /// Try a DDC operation; on failure, reconnect and retry once.
+    private func withReconnect(_ operation: (DDCDisplay) throws -> Void) -> Bool {
+        if let display {
+            do {
+                try operation(display)
+                return true
+            } catch {
+                NSLog("BrightnessEngine: DDC write failed, reconnecting: %@",
+                      error.localizedDescription)
+            }
+        }
+        reconnect()
+        guard let display else { return false }
+        do {
+            try operation(display)
+            return true
+        } catch {
+            NSLog("BrightnessEngine: DDC write failed after reconnect: %@",
+                  error.localizedDescription)
+            return false
+        }
     }
 
     private func clampBrightness(_ value: Int) -> Int {
@@ -107,5 +183,9 @@ final class BrightnessEngine {
 
     private func clampContrast(_ value: Int) -> Int {
         max(settings.contrastMin, min(settings.contrastMax, value))
+    }
+
+    private func clampVolume(_ value: Int) -> Int {
+        max(settings.volumeMin, min(settings.volumeMax, value))
     }
 }

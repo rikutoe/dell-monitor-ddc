@@ -3,6 +3,7 @@ import Foundation
 public enum VCPCode: UInt8, Sendable {
     case brightness = 0x10
     case contrast = 0x12
+    case volume = 0x62
 }
 
 public struct DDCPacket: Sendable {
@@ -51,6 +52,42 @@ public struct DDCPacket: Sendable {
             range: 0...2
         )
         return data
+    }
+
+    /// Parse a DDC GET VCP reply and extract the current value.
+    ///
+    /// Scans for length byte `0x88` followed by opcode `0x02` to handle
+    /// responses with or without the source address prefix.
+    public static func parseReadReply(_ data: [UInt8], expectedVCP: UInt8) throws -> UInt16 {
+        // Find DDC reply start: length byte (0x88) + opcode (0x02)
+        var offset = -1
+        for i in 0..<(data.count - 1) {
+            if data[i] == 0x88 && data[i + 1] == 0x02 {
+                offset = i
+                break
+            }
+        }
+
+        guard offset >= 0, offset + 9 < data.count else {
+            let hex = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+            NSLog("DDCControl: Invalid read response: %@", hex)
+            throw DDCError.invalidResponse
+        }
+
+        // Layout relative to length byte:
+        // [0] 0x88  length    [1] 0x02  opcode
+        // [2] result code     [3] VCP opcode
+        // [4] type code       [5] max high
+        // [6] max low         [7] present high
+        // [8] present low     [9] checksum
+        let resultCode = data[offset + 2]
+        guard resultCode == 0x00 else {
+            NSLog("DDCControl: VCP error result code: %d", resultCode)
+            throw DDCError.invalidResponse
+        }
+
+        let currentValue = (UInt16(data[offset + 7]) << 8) | UInt16(data[offset + 8])
+        return currentValue
     }
 
     /// XOR checksum over a range of bytes with an initial value.

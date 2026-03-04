@@ -55,6 +55,26 @@ struct DDCPacketTests {
         #expect(packet[3] == expected)
     }
 
+    @Test("Write packet for volume=80")
+    func writePacketVolume80() {
+        let packet = DDCPacket.makeWritePacket(vcp: 0x62, value: 80)
+        #expect(packet.count == 6)
+        #expect(packet[2] == 0x62) // VCP code (volume)
+        #expect(packet[3] == 0x00) // value high
+        #expect(packet[4] == 0x50) // value low (80)
+        let expected: UInt8 = 0x6E ^ 0x51 ^ 0x84 ^ 0x03 ^ 0x62 ^ 0x00 ^ 0x50
+        #expect(packet[5] == expected)
+    }
+
+    @Test("Read packet for volume")
+    func readPacketVolume() {
+        let packet = DDCPacket.makeReadPacket(vcp: 0x62)
+        #expect(packet.count == 4)
+        #expect(packet[2] == 0x62)
+        let expected: UInt8 = 0x6E ^ 0x82 ^ 0x01 ^ 0x62
+        #expect(packet[3] == expected)
+    }
+
     @Test("XOR checksum basic")
     func xorChecksum() {
         let data: [UInt8] = [0xAA, 0x55, 0xFF]

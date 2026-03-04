@@ -7,11 +7,31 @@ struct MenuBarView: View {
     private let settings = SettingsStore.shared
     @State private var brightness: Double = 0
     @State private var contrast: Double = 0
+    @State private var volume: Double = 0
     @State private var savedPreset: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         VStack(spacing: 12) {
+            // Error banner
+            if let error = engine.lastReadError {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.yellow.opacity(0.1))
+                )
+            }
+
             // Brightness slider
             HStack {
                 Image(systemName: "sun.max.fill")
@@ -36,6 +56,20 @@ struct MenuBarView: View {
                     step: 1
                 )
                 Text("\(Int(contrast))")
+                    .monospacedDigit()
+                    .frame(width: 30, alignment: .trailing)
+            }
+
+            // Volume slider
+            HStack {
+                Image(systemName: "speaker.wave.2.fill")
+                    .frame(width: 20)
+                Slider(
+                    value: $volume,
+                    in: Double(engine.minValue)...Double(engine.maxValue),
+                    step: 1
+                )
+                Text("\(Int(volume))")
                     .monospacedDigit()
                     .frame(width: 30, alignment: .trailing)
             }
@@ -93,8 +127,12 @@ struct MenuBarView: View {
         }
         .padding()
         .frame(width: 280)
-        .onAppear { syncFromEngine() }
+        .onAppear {
+            engine.refreshFromDisplay()
+            syncFromEngine()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            engine.refreshFromDisplay()
             syncFromEngine()
         }
         .onChange(of: brightness) { _, newValue in
@@ -109,6 +147,12 @@ struct MenuBarView: View {
                 engine.adjustContrast(to: intValue)
             }
         }
+        .onChange(of: volume) { _, newValue in
+            let intValue = Int(newValue)
+            if intValue != engine.volume {
+                engine.adjustVolume(to: intValue)
+            }
+        }
     }
 
     private func matchesPreset(b: Int, c: Int) -> Bool {
@@ -118,6 +162,7 @@ struct MenuBarView: View {
     private func syncFromEngine() {
         brightness = Double(engine.brightness)
         contrast = Double(engine.contrast)
+        volume = Double(engine.volume)
     }
 
     private func applyPreset(brightness b: Int, contrast c: Int) {
