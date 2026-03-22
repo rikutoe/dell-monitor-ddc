@@ -1,21 +1,36 @@
 import Cocoa
 import CoreGraphics
 
-/// Intercepts F1/F2 key events via CGEvent tap.
+/// Intercepts brightness and volume key events via CGEvent tap.
+/// Supports F1/F2 (Apple keyboard), F14/F15 (external keyboard brightness keys),
+/// and volume media keys / F10-F12 keycodes.
 /// Callbacks return Bool: true = handled (consume event), false = passthrough.
 final class HotkeyManager {
+    // Brightness keycodes
     private static let keyF1: Int64 = 0x7A
     private static let keyF2: Int64 = 0x78
+    private static let keyF14: Int64 = 0x6B  // brightness down on external keyboards
+    private static let keyF15: Int64 = 0x71  // brightness up on external keyboards
+
+    // Volume keycodes (standard function key mode)
+    private static let keyF10: Int64 = 0x6D  // mute
+    private static let keyF11: Int64 = 0x67  // volume down
+    private static let keyF12: Int64 = 0x6F  // volume up
 
     private var eventTap: CFMachPort?
 
     /// Return true to consume the event, false to pass through.
-    var onF1: (() -> Bool)?
-    var onF2: (() -> Bool)?
+    var onBrightnessDown: (() -> Bool)?
+    var onBrightnessUp: (() -> Bool)?
+    var onVolumeDown: (() -> Bool)?
+    var onVolumeUp: (() -> Bool)?
+    var onMute: (() -> Bool)?
 
     func start() {
         let trusted = AXIsProcessTrusted()
+        AppLog.log("[Hotkey] AXIsProcessTrusted = \(trusted)")
         guard trusted else {
+            AppLog.log("[Hotkey] NOT trusted — prompting accessibility")
             promptAccessibility()
             return
         }
@@ -24,6 +39,7 @@ final class HotkeyManager {
             CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << 14) // NX_SYSDEFINED
 
+        AppLog.log("[Hotkey] Creating CGEvent tap...")
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -39,7 +55,7 @@ final class HotkeyManager {
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            NSLog("[Hotkey] Failed to create CGEvent tap")
+            AppLog.log("[Hotkey] FAILED to create CGEvent tap")
             return
         }
 
@@ -47,6 +63,7 @@ final class HotkeyManager {
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        AppLog.log("[Hotkey] CGEvent tap active — listening for brightness & volume keys")
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -62,16 +79,43 @@ final class HotkeyManager {
             return handleMediaKey(event: event)
         }
 
-        // Regular keyDown (Fn+F1/F2 or standard function key mode)
+        // Regular keyDown — function key mode
         if type == .keyDown {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode == Self.keyF1 {
-                let handled = onF1?() ?? false
-                return handled ? nil : Unmanaged.passRetained(event)
-            } else if keyCode == Self.keyF2 {
-                let handled = onF2?() ?? false
-                return handled ? nil : Unmanaged.passRetained(event)
-            }
+            return handleKeyDown(keyCode: keyCode, event: event)
+        }
+
+        return Unmanaged.passRetained(event)
+    }
+
+    private func handleKeyDown(keyCode: Int64, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Brightness
+        if keyCode == Self.keyF1 || keyCode == Self.keyF14 {
+            AppLog.log("[Hotkey] Brightness DOWN (keyCode=0x\(String(keyCode, radix: 16)))")
+            let handled = onBrightnessDown?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        }
+        if keyCode == Self.keyF2 || keyCode == Self.keyF15 {
+            AppLog.log("[Hotkey] Brightness UP (keyCode=0x\(String(keyCode, radix: 16)))")
+            let handled = onBrightnessUp?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        }
+
+        // Volume
+        if keyCode == Self.keyF11 {
+            AppLog.log("[Hotkey] Volume DOWN (keyCode=0x\(String(keyCode, radix: 16)))")
+            let handled = onVolumeDown?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        }
+        if keyCode == Self.keyF12 {
+            AppLog.log("[Hotkey] Volume UP (keyCode=0x\(String(keyCode, radix: 16)))")
+            let handled = onVolumeUp?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        }
+        if keyCode == Self.keyF10 {
+            AppLog.log("[Hotkey] Mute (keyCode=0x\(String(keyCode, radix: 16)))")
+            let handled = onMute?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
         }
 
         return Unmanaged.passRetained(event)
@@ -91,10 +135,22 @@ final class HotkeyManager {
 
         switch keyType {
         case 3: // NX_KEYTYPE_BRIGHTNESS_DOWN
-            let handled = onF1?() ?? false
+            let handled = onBrightnessDown?() ?? false
             return handled ? nil : Unmanaged.passRetained(event)
         case 2: // NX_KEYTYPE_BRIGHTNESS_UP
-            let handled = onF2?() ?? false
+            let handled = onBrightnessUp?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        case 1: // NX_KEYTYPE_SOUND_DOWN
+            AppLog.log("[Hotkey] Media VOLUME DOWN")
+            let handled = onVolumeDown?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        case 0: // NX_KEYTYPE_SOUND_UP
+            AppLog.log("[Hotkey] Media VOLUME UP")
+            let handled = onVolumeUp?() ?? false
+            return handled ? nil : Unmanaged.passRetained(event)
+        case 7: // NX_KEYTYPE_MUTE
+            AppLog.log("[Hotkey] Media MUTE")
+            let handled = onMute?() ?? false
             return handled ? nil : Unmanaged.passRetained(event)
         default:
             return Unmanaged.passRetained(event)

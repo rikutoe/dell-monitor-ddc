@@ -24,27 +24,33 @@ final class SettingsStore {
     }
 
     var brightnessMin: Int {
-        get { defaults.object(forKey: Keys.brightnessMin) as? Int ?? 0 }
+        get { defaults.object(forKey: Keys.brightnessMin) as? Int ?? 15 }
         set { defaults.set(newValue, forKey: Keys.brightnessMin) }
     }
 
     var brightnessMax: Int {
-        get { defaults.object(forKey: Keys.brightnessMax) as? Int ?? 100 }
+        get { defaults.object(forKey: Keys.brightnessMax) as? Int ?? 75 }
         set { defaults.set(newValue, forKey: Keys.brightnessMax) }
     }
 
     var contrastMin: Int {
-        get { defaults.object(forKey: Keys.contrastMin) as? Int ?? 0 }
+        get { defaults.object(forKey: Keys.contrastMin) as? Int ?? 25 }
         set { defaults.set(newValue, forKey: Keys.contrastMin) }
     }
 
     var contrastMax: Int {
-        get { defaults.object(forKey: Keys.contrastMax) as? Int ?? 100 }
+        get { defaults.object(forKey: Keys.contrastMax) as? Int ?? 90 }
         set { defaults.set(newValue, forKey: Keys.contrastMax) }
     }
 
+    /// Number of hotkey steps from min to max.
+    var hotkeySteps: Int {
+        get { defaults.object(forKey: Keys.step) as? Int ?? 16 }
+        set { defaults.set(newValue, forKey: Keys.step) }
+    }
+
     var step: Int {
-        get { defaults.object(forKey: Keys.step) as? Int ?? 5 }
+        get { defaults.object(forKey: Keys.step) as? Int ?? 16 }
         set { defaults.set(newValue, forKey: Keys.step) }
     }
 

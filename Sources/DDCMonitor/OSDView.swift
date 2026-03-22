@@ -1,7 +1,14 @@
 import SwiftUI
 
-/// Tahoe-style OSD content view showing brightness level.
+/// The kind of value the OSD is displaying.
+enum OSDKind {
+    case brightness
+    case volume
+}
+
+/// Tahoe-style OSD content view.
 struct OSDView: View {
+    let kind: OSDKind
     let value: Int
     let maxValue: Int
 
@@ -12,7 +19,7 @@ struct OSDView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: brightnessIcon)
+            Image(systemName: icon)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
@@ -40,13 +47,15 @@ struct OSDView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private var brightnessIcon: String {
-        if fraction < 0.33 {
-            return "sun.min.fill"
-        } else if fraction < 0.66 {
-            return "sun.max.fill"
-        } else {
-            return "sun.max.fill"
+    private var icon: String {
+        switch kind {
+        case .brightness:
+            return fraction < 0.33 ? "sun.min.fill" : "sun.max.fill"
+        case .volume:
+            if value == 0 { return "speaker.slash.fill" }
+            return fraction < 0.33 ? "speaker.wave.1.fill"
+                : fraction < 0.66 ? "speaker.wave.2.fill"
+                : "speaker.wave.3.fill"
         }
     }
 }

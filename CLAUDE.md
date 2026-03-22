@@ -38,6 +38,11 @@ Apple Silicon Mac + USB-C/Thunderbolt connection. Swift + SwiftUI, no external r
 4. If review feedback given, fix and re-request review
 5. Update PROGRESS.md phase status to "complete" only after user approval
 
+## Build & Deploy Rules
+- After every build, run `Scripts/build-app.sh`, copy to `/Applications/`, and launch the app
+- Sequence: `bash Scripts/build-app.sh && pkill -x DDCMonitor; sleep 1; cp -R .build/release-app/DDCMonitor.app /Applications/ && open /Applications/DDCMonitor.app`
+- The user should be able to immediately test after any code change
+
 ## Coding Rules
 - Modular approach: split by responsibility
 - Each file under 300 lines; split if exceeding

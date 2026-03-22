@@ -20,12 +20,29 @@ final class BrightnessEngine {
         volume = settings.lastVolume ?? 50
     }
 
-    var step: Int { settings.step }
     var minValue: Int { 0 }
     var maxValue: Int { 100 }
 
-    /// Called when values change (for UI updates).
+    /// Current normalized level (0.0 = min, 1.0 = max), derived from brightness.
+    private var level: Double {
+        let range = Double(settings.brightnessMax - settings.brightnessMin)
+        guard range > 0 else { return 0 }
+        return Double(brightness - settings.brightnessMin) / range
+    }
+
+    private var hotkeySteps: Int { settings.hotkeySteps }
+
+    /// Current normalized volume level (0.0 = min, 1.0 = max).
+    private var volumeLevel: Double {
+        let range = Double(settings.volumeMax - settings.volumeMin)
+        guard range > 0 else { return 0 }
+        return Double(volume - settings.volumeMin) / range
+    }
+
+    /// Called when brightness/contrast change (for OSD).
     var onValueChanged: ((Int, Int) -> Void)?
+    /// Called when volume changes (for OSD).
+    var onVolumeChanged: ((Int) -> Void)?
 
     func setUp() {
         display = DDCDisplay.enumerate().first
@@ -85,12 +102,22 @@ final class BrightnessEngine {
         }
     }
 
+    /// Map a normalized level (0.0–1.0) to brightness and contrast values.
+    private func valuesForLevel(_ lvl: Double) -> (brightness: Int, contrast: Int) {
+        let clamped = max(0, min(1, lvl))
+        let b = settings.brightnessMin + Int(round(clamped * Double(settings.brightnessMax - settings.brightnessMin)))
+        let c = settings.contrastMin + Int(round(clamped * Double(settings.contrastMax - settings.contrastMin)))
+        return (b, c)
+    }
+
     /// Increase brightness and contrast by one step.
     @discardableResult
     func increment() -> Bool {
-        guard CursorRouter.isCursorOnExternalDisplay() else { return false }
-        let bNew = clampBrightness(brightness + step)
-        let cNew = clampContrast(contrast + step)
+        let onExternal = CursorRouter.isCursorOnExternalDisplay()
+        guard onExternal else { return false }
+        let newLevel = min(1.0, level + 1.0 / Double(hotkeySteps))
+        let (bNew, cNew) = valuesForLevel(newLevel)
+        AppLog.log("[Engine] increment() level=\(String(format: "%.3f", level))→\(String(format: "%.3f", newLevel)) b=\(bNew) c=\(cNew)")
         applyBoth(brightness: bNew, contrast: cNew)
         return true
     }
@@ -98,9 +125,11 @@ final class BrightnessEngine {
     /// Decrease brightness and contrast by one step.
     @discardableResult
     func decrement() -> Bool {
-        guard CursorRouter.isCursorOnExternalDisplay() else { return false }
-        let bNew = clampBrightness(brightness - step)
-        let cNew = clampContrast(contrast - step)
+        let onExternal = CursorRouter.isCursorOnExternalDisplay()
+        guard onExternal else { return false }
+        let newLevel = max(0.0, level - 1.0 / Double(hotkeySteps))
+        let (bNew, cNew) = valuesForLevel(newLevel)
+        AppLog.log("[Engine] decrement() level=\(String(format: "%.3f", level))→\(String(format: "%.3f", newLevel)) b=\(bNew) c=\(cNew)")
         applyBoth(brightness: bNew, contrast: cNew)
         return true
     }
@@ -135,22 +164,77 @@ final class BrightnessEngine {
         }
     }
 
-    /// Adjust both brightness and contrast together (hotkey).
-    func adjust(by delta: Int) {
-        let bNew = clampBrightness(brightness + delta)
-        let cNew = clampContrast(contrast + delta)
+    /// Adjust both brightness and contrast by a number of level steps.
+    func adjust(bySteps delta: Int) {
+        let newLevel = max(0, min(1, level + Double(delta) / Double(hotkeySteps)))
+        let (bNew, cNew) = valuesForLevel(newLevel)
         applyBoth(brightness: bNew, contrast: cNew)
     }
 
+    // MARK: - Volume hotkey control
+
+    /// Increase volume by one step via DDC. Only call when audio output is external display.
+    @discardableResult
+    func volumeIncrement() -> Bool {
+        let newLevel = min(1.0, volumeLevel + 1.0 / Double(hotkeySteps))
+        let vNew = volumeForLevel(newLevel)
+        AppLog.log("[Engine] volumeIncrement() level=\(String(format: "%.3f", volumeLevel))→\(String(format: "%.3f", newLevel)) v=\(vNew)")
+        return applyVolume(vNew)
+    }
+
+    /// Decrease volume by one step via DDC.
+    @discardableResult
+    func volumeDecrement() -> Bool {
+        let newLevel = max(0.0, volumeLevel - 1.0 / Double(hotkeySteps))
+        let vNew = volumeForLevel(newLevel)
+        AppLog.log("[Engine] volumeDecrement() level=\(String(format: "%.3f", volumeLevel))→\(String(format: "%.3f", newLevel)) v=\(vNew)")
+        return applyVolume(vNew)
+    }
+
+    /// Toggle mute (set volume to 0, or restore previous).
+    @discardableResult
+    func volumeToggleMute() -> Bool {
+        let vNew = volume > settings.volumeMin ? settings.volumeMin : (settings.lastVolume ?? 50)
+        AppLog.log("[Engine] volumeToggleMute() \(volume)→\(vNew)")
+        return applyVolume(vNew)
+    }
+
+    private func volumeForLevel(_ lvl: Double) -> Int {
+        let clamped = max(0, min(1, lvl))
+        return settings.volumeMin + Int(round(clamped * Double(settings.volumeMax - settings.volumeMin)))
+    }
+
+    private func applyVolume(_ vNew: Int) -> Bool {
+        let ok = withReconnect { try $0.setVolume(vNew) }
+        if ok {
+            volume = vNew
+            settings.lastVolume = vNew
+        }
+        AppLog.log("[Engine] setVolume(\(vNew)) ok=\(ok)")
+        onVolumeChanged?(volume)
+        return ok
+    }
+
+    /// DDC/CI needs a pause between consecutive I2C writes on the same bus.
+    private static let interCommandDelay: useconds_t = 50_000  // 50ms
+
     private func applyBoth(brightness bNew: Int, contrast cNew: Int) {
-        if withReconnect({ try $0.setBrightness(bNew) }) {
+        let bOk = withReconnect({ try $0.setBrightness(bNew) })
+        if bOk {
             brightness = bNew
             settings.lastBrightness = bNew
         }
-        if withReconnect({ try $0.setContrast(cNew) }) {
+        AppLog.log("[Engine] setBrightness(\(bNew)) ok=\(bOk)")
+
+        usleep(Self.interCommandDelay)
+
+        let cOk = withReconnect({ try $0.setContrast(cNew) })
+        if cOk {
             contrast = cNew
             settings.lastContrast = cNew
         }
+        AppLog.log("[Engine] setContrast(\(cNew)) ok=\(cOk)")
+
         onValueChanged?(brightness, contrast)
     }
 

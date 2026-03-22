@@ -19,8 +19,8 @@ final class OSDWindow: NSPanel {
         hidesOnDeactivate = false
     }
 
-    func show(value: Int, maxValue: Int) {
-        let hostView = NSHostingView(rootView: OSDView(value: value, maxValue: maxValue))
+    func show(kind: OSDKind = .brightness, value: Int, maxValue: Int) {
+        let hostView = NSHostingView(rootView: OSDView(kind: kind, value: value, maxValue: maxValue))
         hostView.frame = NSRect(x: 0, y: 0, width: 200, height: 40)
         contentView = hostView
 
