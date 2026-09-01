@@ -1,8 +1,8 @@
 # DDC Monitor
 
-macOS menu bar app for controlling Dell external monitor brightness & contrast via DDC/CI.
+macOS menu bar app for controlling brightness and contrast on DDC/CI-capable external monitors.
 
-Built for Apple Silicon Macs with USB-C/Thunderbolt connected Dell monitors. Pure Swift — no external runtime dependencies.
+Built for Apple Silicon Macs. Dell displays are hardware-verified for DDC/CI control; other compatible displays are supported with automatic software display adjustment when the connection path cannot carry DDC/CI commands. Pure Swift — no external runtime dependencies.
 
 ![App Icon](Resources/AppIcon-preview.png)
 
@@ -10,7 +10,8 @@ Built for Apple Silicon Macs with USB-C/Thunderbolt connected Dell monitors. Pur
 
 - **Menu bar sliders** — Adjust brightness and contrast from the menu bar
 - **Global hotkeys** — Fn+F1/F2 to adjust brightness & contrast simultaneously
-- **Smart display targeting** — Mouse cursor position determines which display to control (DDC for external, passthrough for built-in)
+- **Smart display targeting** — Mouse cursor position determines which display to control (DDC/CI or software adjustment for external, passthrough for built-in)
+- **Connection-aware fallback** — Automatically uses software display adjustment when DDC/CI writes fail, including the Philips PHL 243V7 over its current HDMI connection path
 - **Tahoe-style OSD** — Native floating overlay shows current level on hotkey use
 - **Day/Night presets** — One-click presets with long-press to save current values
 - **Launch at Login** — Toggle from the menu bar; uses macOS native login items
@@ -19,7 +20,8 @@ Built for Apple Silicon Macs with USB-C/Thunderbolt connected Dell monitors. Pur
 
 - macOS 14.0+
 - Apple Silicon Mac
-- Dell external monitor via USB-C or Thunderbolt
+- External monitor that supports DDC/CI; Dell monitors are hardware-verified
+- A connection path that passes DDC/CI commands for hardware control. When it does not, the app automatically falls back to software display adjustment
 - Accessibility permission (for global hotkeys)
 
 ## Install
@@ -58,7 +60,7 @@ Sources/
   DDCControl/              # Native DDC/CI library
     DDCDisplay.swift       # Display enumeration + VCP read/write
     DDCPacket.swift        # DDC packet construction + checksum
-    IOAVServiceBridge.swift # Private API via @_silgen_name
+    IOAVServiceBridge.swift # Private API loaded at runtime
 ```
 
 ## Key Design Decisions
@@ -66,7 +68,7 @@ Sources/
 | Decision | Rationale |
 |---|---|
 | Write-only DDC (in-memory tracking) | DDC reads are unreliable on Apple Silicon |
-| IOAVService via `@_silgen_name` | Direct DDC access without external tools |
+| IOAVService loaded at runtime | Direct DDC access without external tools while avoiding an ABI crash |
 | CGEvent tap for hotkeys | System-wide F1/F2 interception with passthrough |
 | NSPanel for OSD | Floating window without private OSD APIs |
 

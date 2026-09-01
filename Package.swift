@@ -23,5 +23,10 @@ let package = Package(
             dependencies: ["DDCControl"],
             path: "Tests/DDCControlTests"
         ),
+        .testTarget(
+            name: "DDCMonitorTests",
+            dependencies: ["DDCMonitor"],
+            path: "Tests/DDCMonitorTests"
+        ),
     ]
 )

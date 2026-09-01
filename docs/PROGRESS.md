@@ -44,9 +44,11 @@
   - IOAVServiceBridge.swift - Private API via dlsym (not @_silgen_name due to ABI crash)
   - DDCDisplay.swift - Display enumeration + VCP write
   - DDCError.swift - Error types
-  - DDCPacketTests.swift - 7 tests passing
+  - DDCPacketTests.swift - checksum verification tests
+  - DDC write retry tests - retry behavior coverage added
 - **Verified**: Native DDC brightness/contrast write via IOAVService works
 - **Note**: @_silgen_name caused SIGTRAP crash; switched to dlsym + @convention(c)
+- **Compatibility update**: DDC/CI writes are retried before automatic software display adjustment. Dell hardware remains DDC-verified. The Philips PHL 243V7 currently falls back when connected through its HDMI path, which does not reliably pass DDC/CI commands.
 
 ### Phase 4: Global hotkeys (F1/F2) + Tahoe-style OSD
 - **Status**: Partial

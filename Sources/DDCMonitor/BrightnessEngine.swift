@@ -2,7 +2,6 @@ import Foundation
 import Observation
 import DDCControl
 import AppKit
-
 /// Manages brightness and contrast values, applying changes to the display.
 @Observable
 final class BrightnessEngine {
@@ -12,49 +11,37 @@ final class BrightnessEngine {
     /// Error message from the last display read attempt (nil = success).
     var lastReadError: String?
     private var display: DDCDisplay?
+    private var controlMode = DisplayControlMode()
+    private let softwareDisplay = SoftwareDisplayController()
     private let settings = SettingsStore.shared
-
     init() {
         brightness = settings.lastBrightness ?? 50
         contrast = settings.lastContrast ?? 50
         volume = settings.lastVolume ?? 50
     }
-
     var minValue: Int { 0 }
     var maxValue: Int { 100 }
-
     /// Current normalized level (0.0 = min, 1.0 = max), derived from brightness.
     private var level: Double {
         let range = Double(settings.brightnessMax - settings.brightnessMin)
         guard range > 0 else { return 0 }
         return Double(brightness - settings.brightnessMin) / range
     }
-
     private var hotkeySteps: Int { settings.hotkeySteps }
-
     /// Current normalized volume level (0.0 = min, 1.0 = max).
     private var volumeLevel: Double {
         let range = Double(settings.volumeMax - settings.volumeMin)
         guard range > 0 else { return 0 }
         return Double(volume - settings.volumeMin) / range
     }
-
     /// Called when brightness/contrast change (for OSD).
     var onValueChanged: ((Int, Int) -> Void)?
     /// Called when volume changes (for OSD).
     var onVolumeChanged: ((Int) -> Void)?
 
     func setUp() {
-        display = DDCDisplay.enumerate().first
-        if display == nil {
-            NSLog("BrightnessEngine: No external display found")
-        }
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(screenDidChange),
-            name: NSApplication.didChangeScreenParametersNotification,
-            object: nil
-        )
+        reconnect()
+        NotificationCenter.default.addObserver(self, selector: #selector(screenDidChange), name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     @objc private func screenDidChange(_ note: Notification) {
@@ -64,6 +51,11 @@ final class BrightnessEngine {
 
     /// Re-enumerate displays to pick up reconnected monitors.
     func reconnect() {
+        controlMode.resetForReconnect()
+        refreshDisplayConnection()
+    }
+
+    private func refreshDisplayConnection() {
         display = DDCDisplay.enumerate().first
         if display != nil {
             NSLog("BrightnessEngine: Display reconnected")
@@ -78,7 +70,7 @@ final class BrightnessEngine {
         lastReadError = nil
 
         if display == nil {
-            reconnect()
+            refreshDisplayConnection()
         }
         guard let display else {
             lastReadError = DDCError.noExternalDisplay.localizedDescription
@@ -89,12 +81,9 @@ final class BrightnessEngine {
             let b = try display.getBrightness()
             let c = try display.getContrast()
             let v = try display.getVolume()
-            brightness = b
-            contrast = c
-            volume = v
-            settings.lastBrightness = b
-            settings.lastContrast = c
-            settings.lastVolume = v
+            brightness = b; contrast = c; volume = v
+            settings.lastBrightness = b; settings.lastContrast = c; settings.lastVolume = v
+            completeDDCSuccess(after: "read")
             NSLog("BrightnessEngine: Read from display - brightness=%d, contrast=%d, volume=%d", b, c, v)
         } catch {
             NSLog("BrightnessEngine: Failed to read from display: %@", error.localizedDescription)
@@ -137,20 +126,26 @@ final class BrightnessEngine {
     /// Set brightness directly (from slider). No OSD.
     func adjustBrightness(to value: Int) {
         let clamped = clampBrightness(value)
-        let ok = withReconnect { try $0.setBrightness(clamped) }
+        let ok = controlMode.shouldAttemptDDC && withReconnect { try $0.setBrightness(clamped) }
         if ok {
             brightness = clamped
             settings.lastBrightness = clamped
+            completeDDCSuccess(after: "brightness write")
+        } else {
+            _ = applySoftware(brightness: clamped, contrast: contrast)
         }
     }
 
     /// Set contrast directly (from slider). No OSD.
     func adjustContrast(to value: Int) {
         let clamped = clampContrast(value)
-        let ok = withReconnect { try $0.setContrast(clamped) }
+        let ok = controlMode.shouldAttemptDDC && withReconnect { try $0.setContrast(clamped) }
         if ok {
             contrast = clamped
             settings.lastContrast = clamped
+            completeDDCSuccess(after: "contrast write")
+        } else {
+            _ = applySoftware(brightness: brightness, contrast: clamped)
         }
     }
 
@@ -209,6 +204,7 @@ final class BrightnessEngine {
         if ok {
             volume = vNew
             settings.lastVolume = vNew
+            completeDDCSuccess(after: "volume write")
         }
         AppLog.log("[Engine] setVolume(\(vNew)) ok=\(ok)")
         onVolumeChanged?(volume)
@@ -219,23 +215,60 @@ final class BrightnessEngine {
     private static let interCommandDelay: useconds_t = 50_000  // 50ms
 
     private func applyBoth(brightness bNew: Int, contrast cNew: Int) {
-        let bOk = withReconnect({ try $0.setBrightness(bNew) })
-        if bOk {
-            brightness = bNew
-            settings.lastBrightness = bNew
+        guard controlMode.shouldAttemptDDC else {
+            _ = applySoftware(brightness: bNew, contrast: cNew)
+            onValueChanged?(brightness, contrast)
+            return
         }
+        let previousBrightness = brightness
+        let previousContrast = contrast
+        let bOk = withReconnect({ try $0.setBrightness(bNew) })
         AppLog.log("[Engine] setBrightness(\(bNew)) ok=\(bOk)")
 
         usleep(Self.interCommandDelay)
 
         let cOk = withReconnect({ try $0.setContrast(cNew) })
-        if cOk {
+        if bOk && cOk {
+            brightness = bNew
+            settings.lastBrightness = bNew
             contrast = cNew
             settings.lastContrast = cNew
+            completeDDCSuccess(after: "brightness and contrast write")
+        } else {
+            restorePartialHardwareWrite(brightness: previousBrightness, contrast: previousContrast, wroteBrightness: bOk, wroteContrast: cOk)
+            _ = applySoftware(brightness: bNew, contrast: cNew)
         }
         AppLog.log("[Engine] setContrast(\(cNew)) ok=\(cOk)")
 
         onValueChanged?(brightness, contrast)
+    }
+
+    /// Undo a partial DDC update before applying the software fallback to avoid double dimming.
+    private func restorePartialHardwareWrite(brightness: Int, contrast: Int, wroteBrightness: Bool, wroteContrast: Bool) {
+        if wroteBrightness {
+            _ = withReconnect { try $0.setBrightness(brightness) }
+        }
+        if wroteContrast {
+            _ = withReconnect { try $0.setContrast(contrast) }
+        }
+    }
+
+    private func applySoftware(brightness: Int, contrast: Int) -> Bool {
+        guard softwareDisplay.apply(brightness: brightness, contrast: contrast) else { return false }
+        self.brightness = brightness; self.contrast = contrast
+        settings.lastBrightness = brightness; settings.lastContrast = contrast
+        if controlMode.beginSoftwareFallback() {
+            AppLog.log("[Engine] Software fallback mode started after DDC failure")
+        }
+        AppLog.log("[Engine] Software fallback applied for brightness and contrast")
+        return true
+    }
+
+    private func completeDDCSuccess(after operation: String) {
+        controlMode.didSucceedWithDDC()
+        if softwareDisplay.restoreStandardTransfer() {
+            AppLog.log("[Engine] Software fallback transfer restored after DDC \(operation)")
+        }
     }
 
     /// Try a DDC operation; on failure, reconnect and retry once.
@@ -245,31 +278,23 @@ final class BrightnessEngine {
                 try operation(display)
                 return true
             } catch {
-                NSLog("BrightnessEngine: DDC write failed, reconnecting: %@",
-                      error.localizedDescription)
+                NSLog("BrightnessEngine: DDC write failed, reconnecting: %@", error.localizedDescription)
             }
         }
-        reconnect()
+        refreshDisplayConnection()
         guard let display else { return false }
         do {
             try operation(display)
             return true
         } catch {
-            NSLog("BrightnessEngine: DDC write failed after reconnect: %@",
-                  error.localizedDescription)
+            NSLog("BrightnessEngine: DDC write failed after reconnect: %@", error.localizedDescription)
             return false
         }
     }
 
-    private func clampBrightness(_ value: Int) -> Int {
-        max(settings.brightnessMin, min(settings.brightnessMax, value))
-    }
+    private func clampBrightness(_ value: Int) -> Int { max(settings.brightnessMin, min(settings.brightnessMax, value)) }
 
-    private func clampContrast(_ value: Int) -> Int {
-        max(settings.contrastMin, min(settings.contrastMax, value))
-    }
+    private func clampContrast(_ value: Int) -> Int { max(settings.contrastMin, min(settings.contrastMax, value)) }
 
-    private func clampVolume(_ value: Int) -> Int {
-        max(settings.volumeMin, min(settings.volumeMax, value))
-    }
+    private func clampVolume(_ value: Int) -> Int { max(settings.volumeMin, min(settings.volumeMax, value)) }
 }

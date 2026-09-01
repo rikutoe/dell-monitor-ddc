@@ -4,12 +4,8 @@ import Foundation
 public final class DDCDisplay {
     private let service: IOAVServiceRef
 
-    /// Delay between DDC I2C operations (microseconds).
-    private static let ddcWait: UInt32 = 10_000
     /// Delay after sending a read request (microseconds).
     private static let readWait: UInt32 = 40_000
-    /// Number of write cycles per command (some displays need multiple).
-    private static let writeCycles = 2
     /// Response buffer size for DDC read replies.
     private static let readBufferSize = 12
 
@@ -25,19 +21,20 @@ public final class DDCDisplay {
     /// Write a VCP value to the display.
     public func write(vcp: VCPCode, value: UInt16) throws {
         var packet = DDCPacket.makeWritePacket(vcp: vcp.rawValue, value: value)
-
-        for i in 0..<Self.writeCycles {
-            usleep(Self.ddcWait)
-            let ret = avServiceWriteI2C(
+        let policy = DDCWritePolicy.standard
+        let failure = DDCWriteRetry.perform(policy: policy, operation: {
+            avServiceWriteI2C(
                 service,
                 chipAddress: DDCPacket.chipAddress,
                 dataAddress: UInt32(DDCPacket.defaultInputAddress),
                 buffer: &packet
             )
-            if ret != 0 {
-                NSLog("DDCControl: I2C write failed (cycle %d, status %d)", i, ret)
-                throw DDCError.i2cWriteFailed(ret)
-            }
+        }, sleep: { _ = usleep($0) })
+
+        if let failure {
+            NSLog("DDCControl: I2C write failed after %d attempts (status %d)",
+                  policy.maximumRetries + 1, failure)
+            throw DDCError.i2cWriteFailed(failure)
         }
     }
 
